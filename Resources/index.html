@@ -1,0 +1,467 @@
+<html>
+<head>
+<style>
+body.linux, body.win32
+{
+	background: #282828;
+	font-family: Arial;
+}
+body
+{
+	margin:0px;
+	background:-webkit-gradient(linear, left top, left bottom, from(#444), to(#1e1e1e));
+	font-family:"Helvetica Neue", Georgia, sans-serif;
+	color:white;
+	font-size:12px;
+	min-width:750px;
+	padding-bottom:200px;
+
+}
+
+a
+{
+	color:#809eb3;
+}
+
+
+.achievement
+{
+	color: black;
+	margin: 0px auto;
+	padding: 5px 5px 5px 5px;
+	border: 1px solid black;
+	background-color: #ebd37d;
+	position: relative;
+}
+.achievement_old
+{
+	color: black;
+	margin: 0px auto;
+	padding: 5px 5px 5px 5px;
+	border: 1px solid black;
+	background-color: #b58438;
+	position: relative;
+}
+
+#info
+{
+	width: 100%;
+	position: fixed:
+	top: 0;
+	height: 10%;
+	background-color: black;
+	color: white;
+	clear: both;
+	border-bottom: 1px solid white;
+
+}
+
+#content
+{
+	padding:1em 1em 5em; /* bottom padding for footer */
+}
+#content p 
+{
+	text-align:justify;
+	padding:0 1em;
+}
+
+
+#footer
+{
+	width: 100%;
+	position: absolute:
+	bottom: 0;
+	height: 10%;
+	background-color: black;
+	color: white;
+	clear: both;
+	border-top: 1px solid white;
+
+}
+
+.headinfotitle
+{
+	position: relative;
+	float: left;
+	padding: 5px 5px 5px 5px;
+	margin: 5px auto;
+	color: green;
+	font-weight: bold;
+}
+.headinfo
+{
+	position: relative;
+	float: left;
+	padding: 5px 5px 0px 5px;
+	margin: 5px auto;
+	color: green;
+}
+.headinfo span
+{
+	color: white;
+}
+.wowhead {width:125px; height:20px; border: 1px #000 solid; float:right;}
+.wowhead a {width:125px; height:20px; display:block; font: bold .8em; text-align:center;}
+.wowhead a:link {background-color: #282828; color: white; text-decoration:none;}
+.wowhead a:hover {background-color: red; color:white; text-decoration:none;}
+
+.tweet {width:125px; height:20px; border: 1px #000 solid; float:right;}
+.tweet a  {width:125px; height:20px; display:block; font: bold .8em; text-align:center;}
+.tweet a:link {background-color: #282828; color: white; text-decoration:none;}
+.tweet a:hover {background-color: lightblue; color:white; text-decoration:none;}
+
+.edit:hover {background-color: grey;}
+.editinput {background-color: black; border-width: 0px; color: white;}
+.editinput:hover {background-color: grey; color: white;}
+</style>
+<script type="text/javascript" src="checkpage.js"></script>
+<script type="text/javascript" src="jquery-latest.js"></script>
+<script type="text/ruby" src="rb/gather_xml_classless.rb"></script>
+<script type="text/ruby" src="rb/twitter.rb"></script>
+<script type="text/javascript">
+
+// Global Namespace
+var Achievementor = {
+	
+	db: null, // variable for storing the db.
+	
+	/**
+	*	DATABASE RELATED FUNCTIONS
+	 */
+		
+	openDB: function(){
+		var character = $('#character')[0].innerHTML;
+		var realm = $('#realm')[0].innerHTML;
+		var server = $('#server')[0].innerHTML;
+		
+		try {
+			var shortName = 'wowach' +'_'+ character +'_'+ realm +'_'+ server;
+			var version = '1.0';
+			this.db = openDatabase(shortName, version);
+		} catch(e) {
+			if (e == INVALID_STATE_ERR) {
+				alert("Invalid database version.");
+			} else {
+				alert("Unknown error "+e+".");
+			}
+			return false;
+		}
+		
+		//create the table,
+		var query = 'CREATE TABLE IF NOT EXISTS Achievements (id INTEGER PRIMARY KEY, categoryid INTEGER NOT NULL, done TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL, desc TEXT NOT NULL, posted INTEGER DEFAULT 0, marked INTEGER DEFAULT 0);';
+		if (this.db) {
+			this.db.transaction(function(transaction){
+				transaction.executeSql(query, [], self.nullDataHandler, self.errorHandler);
+			});
+		}
+		return true;
+	},
+	
+	posted: function(id) {
+		//this id has been posted so we're going to mark it as old so it'll change color
+		var self = this;
+		var query = "UPDATE Achievements SET posted = 1 WHERE id='"+id+"'";
+		if (this.db) {
+			this.db.transaction(function(transaction){
+			transaction.executeSql(query, [], self.nullDataHandler, self.errorHandler);
+			});
+		}	
+	},
+
+	insertAchievement: function(item){
+		var self = this;
+		item = item || { id: '', categoryid: '', done: '', title: '', icon: '', desc: ''};
+		//figure out if this record is in the database yet or not
+		//var countquery = 'SELECT COUNT(*) AS "count" FROM Achievements WHERE id ="'+item.id+'";' 
+		var query = 'Insert OR IGNORE into Achievements (id, categoryId, done, title, icon, desc) values("'+item.id+'","'+item.categoryId+'","'+item.done+'","'+item.title+'","'+item.icon+'","'+item.desc+'");';
+		if (this.db) {
+			this.db.transaction(function(transaction){
+			//transaction.executeSql(query, [], function(){self.checkAndInsert.call(self, item, arguments[0], arguments[1])}, self.errorHandler);
+			transaction.executeSql(query, [], self.nullDataHandler, self.errorHandler);
+			});
+		}
+	},
+
+	
+	nullDataHandler: function(transaction, results){
+	},
+	
+	errorHandler: function(transaction, error){
+		alert('Error: '+error.message+' (Code '+error.code+')' + ' Transaction: ' + transaction);
+		return false;
+	},
+	
+	
+	/**
+	 *	GRABBER AND PARSER
+	 **/
+		
+	grab_data: function() {
+		var self = this;
+		var files = new Array('temp0.xml', 
+		'temp155.xml',
+		'temp168.xml',
+		'temp169.xml',
+		'temp201.xml',
+		'temp81.xml',
+		'temp91.xml',
+		'temp95.xml',
+		'temp96.xml',
+		'temp97.xml');
+
+		this.openDB();
+		document.getElementById('status').innerHTML = "Gathering Data...";
+		files.forEach(function(file){
+		try {
+			var file = Titanium.Filesystem.getFileStream(Titanium.App.appURLToPath('app://' + file));
+			file.open(Titanium.Filesystem.FILESTREAM_MODE_READ);
+			var data = file.read();
+			file.close();
+		} catch (e) {
+			alert("Error: Unable to open xml files.");
+		}
+		self.parse_data(data);
+		});
+		//parsing is done, remove xml files
+		files.forEach(function(file){
+		var filePath = Titanium.App.appURLToPath('app://' + file)
+		var filetoremove = Titanium.Filesystem.getFile(filePath);
+		filetoremove.deleteFile();
+		});
+		self.select_all();
+	},
+	
+	parse_data: function(data){
+		var self = this;
+		this.dblock = 1;
+		var dom = new DOMParser().parseFromString(data,"text/xml");
+		var entries = dom.getElementsByTagName('achievement');
+		entries.forEach = Array.prototype.forEach
+		var toreturn = '';
+
+		var status = document.getElementById('status');
+		var returns = document.getElementById('returns');
+
+		entries.forEach(function(entry){
+			var data = {
+				id: entry.getAttribute('id'),
+				done: entry.getAttribute('dateCompleted'),
+				title: entry.getAttribute('title'),
+				icon: entry.getAttribute('icon'),
+				desc: entry.getAttribute('desc'),
+				categoryId : entry.getAttribute('categoryId')
+			}
+
+			if (data.done != null) {
+				data.done = data.done.substr(0,10);
+				toreturn += '<div class="achievement"><br>ID: ' + data.id + ' Completed on:' + data.done + ' Title:' + data.title +'<br>Description: ' + data.desc +"</div>";
+				self.insertAchievement(data);
+			}
+		});
+
+		if (entries.length == 0) {
+			returns.innerHTML = 'Error: Armory returned 0 achievements.';
+			status.innerHTML = "Errored out.";
+		} else {
+			status.innerHTML = "";
+		}
+	},
+	
+	/** 
+	*   Select all from Database
+	*/
+	select_all: function(){
+		var self = this;
+		
+		var query = 'SELECT * FROM Achievements ORDER BY categoryId, posted;';
+		if (this.db) {
+			this.db.transaction(function(transaction){
+			transaction.executeSql(query, [], self.selectHandler, self.errorHandler);
+			});
+		}
+	},
+	
+	selectHandler: function(transaction, results){
+		var status = document.getElementById('status');
+		var returns = document.getElementById('returns');
+		var character = document.getElementById('character');	
+		returns.innerHTML = "";
+		for(var i = 0; i < results.rows.length; i++)
+		{
+			var row = results.rows.item(i);
+			var id = row['id'];
+			var title = row['title'];
+			var done = row['done'];
+			var posted = row['posted'];
+
+			if(posted == 0)
+			{var posted_class = "achievement";}
+			else
+			{var posted_class = "achievement_old";}
+			
+			var tempstring = "" + character.innerHTML + " completed <b>" + title + "</b> on " + done;
+			var taggedid = '"' + id + '"';
+			var divinfo = "<div id='"+id+"' class='"+posted_class+"'>" + tempstring + "<div class='tweet' onClick='Achievementor.tweetme("+taggedid+");'><a href='#'>Tweet</a></div><div class='wowhead'><a href='http://www.wowhead.com/?achievement="+id+"' target='ti:systembrowser'>WoWhead</a></div></div>";
+			returns.innerHTML += divinfo;
+		}
+		status.innerHTML = "";
+	},
+	
+	/**
+	*	TweetMe - needs access to db to mark posted
+	*/
+	tweetme:function(id)
+	{
+		var self = this;
+		trim_all();
+		var tweetinfo = '#'+id;
+		var hiddentweet = document.getElementById("hidden");
+		var tweetout = "#WoWHorn " + $(tweetinfo).text().replace('TweetWoWhead', '');
+		var date = tweetout.substr(tweetout.length-10, 10);
+		var year = date.substr(0, 4);
+		var month = date.substr(5, 2);
+		var day = date.substr(8, 2);
+		var monthname = '';
+		switch(month)
+		{
+		case '01':
+			monthname = "Jan.";
+		break;    
+		case '02':
+			monthname = "Feb.";
+		break;
+		case '03':
+			monthname = "Mar.";
+		break;    
+		case '04':
+			monthname = "Apr.";
+		break;    
+		case '05':
+			monthname = "May";
+		break;    
+		case '06':
+			monthname = "June";
+		break;    
+		case '07':
+			monthname = "July";
+		break;    
+		case '08':
+			monthname = "Aug.";
+		break;    
+		case '09':
+			monthname = "Sept.";
+		break;    
+		case '10':
+			monthname = "Oct.";
+		break;    
+		case '11':
+			monthname = "Nov.";
+		break;    
+		case '12':
+			monthname = "Dec.";
+		break;    
+		}
+	
+		var friendlydate = monthname + " " + day + ", " + year;
+		var finaltweet = tweetout.substr(0, tweetout.length-10) + friendlydate;
+		hiddentweet.innerHTML = finaltweet;
+	
+		t.tweet;
+
+		if($('#hidden').text() == "Success")
+		{ //success at tweeting, mark tweet as old
+			self.posted(id);
+		}
+	}
+};
+
+
+
+function trim_all()
+{
+	$('#character').text(($('#character').text()).rtrim());
+	$('#realm').text(($('#realm').text()).rtrim());
+	$('#server').text(($('#server').text()).rtrim());
+	$('#user').text(($('#user').text()).rtrim());
+	$('#pass').val(($('#pass').val()).rtrim());
+
+}
+
+String.prototype.rtrim=function(){
+    return this.replace(/\s*$/g,'');
+}
+
+$(document).ready(function(){
+	$('#check').click(function () {
+		trim_all();
+		Achievementor.grab_data();
+	});
+	$('#gatherdata').click(function () {
+		trim_all();
+		$('#status').text("Gathering Data. Please wait as this takes a few minutes.");
+		gatherdata();
+	});
+	
+	
+});
+</script>
+</head>
+<body>
+<div id="info">
+<div class="headinfotitle">Wow:</div>
+<div class="headinfo"> Character: <span id="character" class="edit" contenteditable="true">Character Name</span></div>
+<div class="headinfo"> Realm: <span id="realm" class="edit" contenteditable="true">Realm Name</span></div>
+<div class="headinfo"> Server: <span id="server" class="edit" contenteditable="true">us / eu</span></div>
+
+<div class="headinfotitle">Twitter:</div>
+<div class="headinfo">  User: <span id="user" class="edit" contenteditable="true">User Name</span></div>
+<div class="headinfo"> Password: <input id="pass" class="editinput" type="password" size=8 value="pasword"></div>
+</div>
+<div id="content">
+	<button id="gatherdata">Gather Data</button>
+	<button id="check">Parse</button> 
+	<div id="status">
+	<h3>WoWHorn: Version 1.0 - Initial Release</h3><h5>WoW Achievement Announcement For Twitter</h5>
+	<br><b>What is WoWHorn?</b>
+	<br>WoWHorn is a program meant to let you track and tweet your acheivements for World of Warcraft.
+	<br>WoWHorn lives at <a href="http://www.aterism.com/code/wowhorn/" target='ti:systembrowser'>Aterism.com</a> and is built with the awesome <a href="http://www.titaniumapp.com" target='ti:systembrowser'>Titanium</a> framework.
+	<br>Visit them for more information.
+	<br>
+	<br><b>Information:</b>
+	<br>Insert your WoW Character information above.
+	<br>Charcter: The character's name.
+	<br>Realm: The realm that character is on such as Velen, Ghostlands, or Azgalor.
+	<br>Server: This is your server type, either 'us' or 'eu'.
+	<br>
+	<br>You can insert your twitter information any time before pushing Tweet.
+	<br>User is your Twitter user name. Email should work as well.
+	<br>Password is your corresponding Twitter password.
+	<br>
+	<br><b>Usage:</b>
+	<br>Hit the Gather Information button to get your achievements from the Armory.
+	<br>This can take up to <u>several minutes</u> so please be patient.
+	<br>The program acts like it is locked up at this point. Just give it a little bit.
+	<br>
+	<br>Once it reports that it is done, push Parse to see your acheivements.
+	<br>You should see your achievements with a couple buttons to the side of each.
+	<br>
+	<br><b>WoWHead:</b>
+	<br>The WoWHead button will open your normal browser to display the WoWHead page about that acheivement.
+	<br>
+	<br><b>Tweet:</b>
+	<br>Tweet will immediately Tweet the acheivement to your Twitter account.  Obviously your Twitter account information needs to be inserted first.
+	<br>
+	<br><b>Errors:</b>
+	<br>Errors will occur.  There are a lot of little cases (and some bigger ones) that haven't even begun to be covered in this release.
+	<br>If you get an error when you Gather Information, check your Character / Realm / Server information. Since this talks to the Armory if it is down or you can't connect to it for whatever reason, this will not work.
+	<br>If you get an error when parsing, try hitting Parse again. Sometimes the database won't have release its lock yet.
+	<br>Errors Tweeting will usually be related to your username and password. I have not encountered an error from the Twitter service being too busy so I can't say what that will look like.
+	<br>
+	<br><i>Please report reoccuring errors at <a href="http://www.aterism.com/code/wowhorn/" target='ti:systembrowser'>Aterism.com</a> with as much detail as possible so they can be addressed.</i>
+	</div>
+	<div id="returns"></div>
+</div>
+<div id="hidden" style="display: none;"></div>
+</body>
+</html>

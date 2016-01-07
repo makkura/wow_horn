@@ -1,0 +1,14 @@
+WoW Horn
+This project is an old example application made using Appcelerator Titanium when it did not support mobile apps and was only able usable for desktop style apps.
+
+Titanium allowed the use web languages to develop desktop applications.
+It also allowed some scripting languages such as Ruby to mix in to the application and be accessible by Javascript.
+
+This is an example using normal front end code [HTML, CSS, and Javascript] to give an interface and call ruby code that accessed WoW's Armory website to gather character achievements and post messages about them to twitter.
+
+At this point, Appcelerator's Titanium only supports mobile platforms (the desktop support is now a project called TideSDK), Twitter's API has been tightened and does not allow simple http post requests to post messages on their service.
+I'm sure the Armory layout has also changed.
+In short, this prjoect has no hope of running and exists for archive purposes only
+
+Appcelerator Titanium: http://www.appcelerator.com/
+TideSDK: http://tidesdk.multipart.net/docs/user-dev/generated/
